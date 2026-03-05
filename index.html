@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate To-Do Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Segoe UI;
+        }
+
+        body {
+            background: #eef2f7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px;
+            transition: 0.3s;
+        }
+
+        .dark {
+            background: #1e293b;
+            color: white;
+        }
+
+        .container {
+            width: 950px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .container {
+            background: #334155;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        .form {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto;
+            gap: 8px;
+        }
+
+        input,
+        select {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .task-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .task {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f3f4f6;
+            padding: 10px;
+            margin-bottom: 6px;
+            border-radius: 8px;
+            cursor: grab;
+        }
+
+        .dark .task {
+            background: #475569;
+        }
+
+        .completed {
+            text-decoration: line-through;
+            color: gray;
+        }
+
+        .category {
+            font-size: 12px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            margin-left: 5px;
+        }
+
+        .work {
+            background: #fee2e2;
+        }
+
+        .personal {
+            background: #dcfce7;
+        }
+
+        .study {
+            background: #e0e7ff;
+        }
+
+        .calendar {
+            margin-top: 20px;
+        }
+
+        .chart {
+            margin-top: 20px;
+        }
+
+        .actions button {
+            margin-left: 4px;
+            padding: 4px 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>Ultimate To-Do Dashboard</h1>
+
+        <div class="controls">
+            <button onclick="toggleDark()">🌙 Dark Mode</button>
+            <button onclick="requestPermission()">🔔 Enable Notifications</button>
+        </div>
+
+        <div class="form">
+
+            <input type="text" id="taskInput" placeholder="Task">
+
+            <input type="date" id="taskDate">
+
+            <input type="time" id="taskTime">
+
+            <input type="number" id="members" placeholder="Members">
+
+            <select id="category">
+                <option value="work">Work</option>
+                <option value="personal">Personal</option>
+                <option value="study">Study</option>
+            </select>
+
+            <select id="priority">
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+            </select>
+
+            <button onclick="addTask()">Add</button>
+
+        </div>
+        <div class="task-list" id="taskList"></div>
+
+        <div class="calendar">
+            <h3>📅 Calendar</h3>
+            <input type="date" id="calendarFilter" onchange="renderTasks()">
+        </div>
+
+        <div class="chart">
+            <h3>📊 Weekly Productivity</h3>
+            <canvas id="chart"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+
+        let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+        let dragIndex = null;
+
+        function save() {
+            localStorage.setItem("tasks", JSON.stringify(tasks));
+            updateChart();
+        }
+
+        function toggleDark() {
+            document.body.classList.toggle("dark");
+        }
+
+        function requestPermission() {
+            Notification.requestPermission();
+        }
+
+        function addTask() {
+
+            let name = document.getElementById("taskInput").value;
+            let date = document.getElementById("taskDate").value;
+            let time = document.getElementById("taskTime").value;
+            let category = document.getElementById("category").value;
+            let priority = document.getElementById("priority").value;
+            let members = document.getElementById("members").value;
+
+            if (name === "") {
+                alert("Please enter task name");
+                return;
+            }
+
+            tasks.push({
+                name,
+                date,
+                time,
+                category,
+                priority,
+                members,
+                completed: false
+            });
+
+            alert("Task Added Successfully");
+
+            save();
+            renderTasks();
+
+            document.getElementById("taskInput").value = "";
+            document.getElementById("taskDate").value = "";
+            document.getElementById("taskTime").value = "";
+            document.getElementById("members").value = "";
+        }
+        function deleteTask(i) {
+            tasks.splice(i, 1);
+            save();
+            renderTasks();
+        }
+
+        function toggleTask(i) {
+            tasks[i].completed = !tasks[i].completed;
+            save();
+            renderTasks();
+        }
+
+        function editTask(i) {
+
+            let newName = prompt("Edit task", tasks[i].name);
+            if (newName) {
+                tasks[i].name = newName;
+                save();
+                renderTasks();
+            }
+
+        }
+
+        function renderTasks() {
+
+            let list = document.getElementById("taskList");
+            let filterDate = document.getElementById("calendarFilter").value;
+
+            list.innerHTML = "";
+
+            tasks.forEach((t, i) => {
+
+                if (filterDate && t.date !== filterDate) return;
+
+                let div = document.createElement("div");
+                div.className = "task";
+                div.draggable = true;
+
+                div.ondragstart = () => dragIndex = i;
+
+                div.ondragover = e => e.preventDefault();
+
+                div.ondrop = () => {
+                    let temp = tasks[i];
+                    tasks[i] = tasks[dragIndex];
+                    tasks[dragIndex] = temp;
+                    save();
+                    renderTasks();
+                };
+
+                div.innerHTML = `
+
+<div class="${t.completed ? 'completed' : ''}">
+<strong>${t.name}</strong><br>
+
+📅 ${t.date || ""} ⏰ ${t.time || ""}<br>
+
+👥 Members: ${t.members || 1}<br>
+
+⏳ ${getRemainingTime(t)}<br>
+
+<span class="category ${t.category}">${t.category}</span>
+
+</div>
+
+<div class="actions">
+<button onclick="toggleTask(${i})">✔</button>
+<button onclick="editTask(${i})">✏</button>
+<button onclick="deleteTask(${i})">🗑</button>
+</div>
+
+`;
+                list.appendChild(div);
+
+                checkReminder(t);
+
+            });
+
+        }
+
+        function getRemainingTime(task) {
+
+            if (!task.date || !task.time) return "";
+
+            let deadline = new Date(task.date + " " + task.time);
+            let now = new Date();
+
+            let diff = deadline - now;
+
+            if (diff <= 0) {
+                return "⚠ Deadline Exceeded";
+            }
+
+            let hours = Math.floor(diff / (1000 * 60 * 60));
+            let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            return "Remaining: " + hours + "h " + minutes + "m";
+
+        }
+        function toggleTask(i) {
+
+            tasks[i].completed = !tasks[i].completed;
+
+            if (tasks[i].completed) {
+                alert("Task Completed Successfully");
+            }
+
+            save();
+            renderTasks();
+        }
+        function checkReminder(task) {
+
+            if (!task.date || !task.time) return;
+
+            let taskTime = new Date(task.date + " " + task.time);
+            let now = new Date();
+
+            let diff = taskTime - now;
+
+            if (diff > 0 && diff < 600) {
+
+                alert("Reminder: " + task.name + " deadline in less than 1 minute");
+
+                new Notification("Task Reminder", { body: task.name });
+
+            }
+
+        }
+        function updateChart() {
+
+            let week = [0, 0, 0, 0, 0, 0, 0];
+
+            tasks.forEach(t => {
+
+                if (t.completed && t.date) {
+
+                    let d = new Date(t.date);
+                    let day = d.getDay();
+
+                    week[day]++;
+
+                }
+
+            });
+
+            chart.data.datasets[0].data = week;
+            chart.update();
+
+        }
+        let ctx = document.getElementById("chart");
+
+        let chart = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+                datasets: [{
+                    label: "Completed Tasks",
+                    data: [0, 0, 0, 0, 0, 0, 0]
+                }]
+            }
+        });
+
+        renderTasks();
+        updateChart();
+
+    </script>
+
+</body>
+
+</html>
